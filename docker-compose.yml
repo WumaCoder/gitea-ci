@@ -1,0 +1,55 @@
+version: "3"
+
+services:
+  gateway:
+    image: traefik:v2.10
+    command: 
+      #- "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      # - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    env_file:
+      - .env
+    restart: always
+    ports:
+      - "3002:80"
+      - "3003:8080"
+      # - "2222:2222"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.runtime/traefik/:/etc/traefik/
+      # - ./.runtime/traefik/acme.json:/acme.json
+  gitea:
+    # image: gitea/gitea:1.20
+    image: gitea/gitea:1.20-nightly
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea.entrypoints=web"
+      - "traefik.http.routers.gitea.rule=PathPrefix(`/`) && !PathPrefix(`/feishubot2`)"
+      - "traefik.http.services.gitea.loadbalancer.server.port=3000"
+    env_file:
+      - .env
+    environment:
+      - USER_UID=${X_UID}
+      - USER_GID=${X_GID}
+      - GITEA__actions__ENABLED=true
+    restart: always
+    volumes:
+      - ./.runtime/gitea:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+  feishubot2:
+    image: node:18.17.0-slim
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.feishubot2.entrypoints=web"
+      - "traefik.http.routers.feishubot2.rule=PathPrefix(`/feishubot2`)"
+      - "traefik.http.services.feishubot2.loadbalancer.server.port=3000"
+    env_file:
+      - .env
+    restart: always
+    volumes:
+      - ./.runtime/.feishu-bot/:/root/.feishu-bot/
+    command: bash -c "npx feishubot2 serve --port 3000"
